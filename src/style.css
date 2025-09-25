@@ -1,0 +1,129 @@
+/* 全局CSS变量和根元素样式 */
+:root {
+  /* 设置系统字体栈，优先使用系统默认字体 */
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* 行高设置为1.5倍，提高文本可读性 */
+  line-height: 1.5;
+  /* 默认字体粗细为400（正常） */
+  font-weight: 400;
+
+  /* 支持明暗主题切换 */
+  color-scheme: light dark;
+  /* 默认文字颜色（暗色主题下的白色，透明度87%） */
+  color: rgba(255, 255, 255, 0.87);
+  /* 默认背景颜色（深灰色） */
+  background-color: #242424;
+
+  /* 禁用字体合成，保持字体原始外观 */
+  font-synthesis: none;
+  /* 优化文本渲染质量 */
+  text-rendering: optimizeLegibility;
+  /* WebKit浏览器字体平滑处理 */
+  -webkit-font-smoothing: antialiased;
+  /* Firefox字体平滑处理 */
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 链接样式 */
+a {
+  /* 链接字体粗细为500（中等粗细） */
+  font-weight: 500;
+  /* 链接颜色为蓝紫色 */
+  color: #646cff;
+  /* 继承父元素的文本装饰 */
+  text-decoration: inherit;
+}
+/* 链接悬停状态 */
+a:hover {
+  /* 悬停时颜色变深 */
+  color: #535bf2;
+}
+
+/* 页面主体样式 */
+body {
+  /* 移除默认外边距 */
+  margin: 0;
+  /* 最小宽度320px，适配小屏设备 */
+  min-width: 320px;
+  /* 最小高度为视口高度，确保全屏显示 */
+  min-height: 100vh;
+}
+
+/* 一级标题样式 */
+h1 {
+  /* 字体大小为3.2倍基础字体大小 */
+  font-size: 3.2em;
+  /* 行高为1.1倍，标题通常使用较紧凑的行高 */
+  line-height: 1.1;
+}
+
+/* 按钮基础样式 */
+button {
+  /* 圆角边框8px */
+  border-radius: 8px;
+  /* 1px透明边框，为悬停效果预留空间 */
+  border: 1px solid transparent;
+  /* 内边距：上下0.6em，左右1.2em */
+  padding: 0.6em 1.2em;
+  /* 字体大小为1em（继承父元素） */
+  font-size: 1em;
+  /* 字体粗细为500（中等粗细） */
+  font-weight: 500;
+  /* 继承父元素字体 */
+  font-family: inherit;
+  /* 背景颜色为深灰色 */
+  background-color: #1a1a1a;
+  /* 鼠标指针样式 */
+  cursor: pointer;
+  /* 边框颜色变化的过渡动画，持续0.25秒 */
+  transition: border-color 0.25s;
+}
+/* 按钮悬停状态 */
+button:hover {
+  /* 悬停时边框变为蓝紫色 */
+  border-color: #646cff;
+}
+/* 按钮获得焦点时的样式 */
+button:focus,
+button:focus-visible {
+  /* 显示4px的焦点轮廓，使用浏览器默认颜色 */
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+/* 卡片容器样式 */
+.card {
+  /* 内边距2em，提供充足的内容空间 */
+  padding: 2em;
+}
+
+/* 应用根容器样式 */
+#app {
+  /* 宽度占满整个视口 */
+  width: 100%;
+  /* 高度占满整个视口 */
+  height: 100vh;
+  /* 移除外边距 */
+  margin: 0;
+  /* 移除内边距 */
+  padding: 0;
+  /* 隐藏溢出内容，防止出现滚动条 */
+  overflow: hidden;
+}
+
+/* 浅色主题媒体查询 - 当用户系统偏好浅色主题时应用 */
+@media (prefers-color-scheme: light) {
+  :root {
+    /* 浅色主题下的文字颜色（深蓝灰色） */
+    color: #213547;
+    /* 浅色主题下的背景颜色（白色） */
+    background-color: #ffffff;
+  }
+  /* 浅色主题下的链接悬停颜色 */
+  a:hover {
+    color: #747bff;
+  }
+  /* 浅色主题下的按钮背景色 */
+  button {
+    background-color: #f9f9f9;
+  }
+}
