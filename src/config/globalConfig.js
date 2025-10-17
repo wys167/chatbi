@@ -4,10 +4,10 @@
 // 默认配置
 const DEFAULT_CONFIG = {
   // 用户ID - 可以在这里修改默认用户ID
-  userId: 'user',
+  userId: '399113',
   
   // 应用ID/Token - 可以在这里修改默认应用Token
-  appId: 'Bearer app-HCDo84avfUjmuc1mtsUeEclx',
+  //appId: 'Bearer app-TWPKrkFsahIoaxT3Z3JozDZ7',
   
   // 停止消息时使用的用户ID
   //stopUserId: 'default_user',

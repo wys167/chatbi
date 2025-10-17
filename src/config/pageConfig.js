@@ -3,7 +3,7 @@
 // API Token配置 - 不同页面使用不同的Token
 export const API_TOKENS = {
   // 数据分析页面
-  dataAnalysis: 'Bearer app-HCDo84avfUjmuc1mtsUeEclx',
+  dataAnalysis: 'Bearer app-TWPKrkFsahIoaxT3Z3JozDZ7',
   // 图表生成页面
   chartGeneration: 'Bearer app-upQgqetiw4q7jlW75v5KaZvT',
   // 报告生成页面
