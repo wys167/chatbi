@@ -1,10 +1,11 @@
 import axios from 'axios'
+import GlobalConfig from '../config/globalConfig.js'
 
 // API基础配置
 const API_BASE_URL = 'http://106.75.76.119'
 /* const API_TOKEN = 'Bearer app-upQgqetiw4q7jlW75v5KaZvT' */
 // 默认API Token，可以通过参数动态覆盖
-const DEFAULT_API_TOKEN = 'Bearer app-HCDo84avfUjmuc1mtsUeEclx'
+const DEFAULT_API_TOKEN = GlobalConfig.getAppId()
 
 // 创建axios实例
 const apiClient = axios.create({
@@ -43,13 +44,14 @@ apiClient.interceptors.response.use(
 // 聊天消息API
 export const chatAPI = {
   // 发送聊天消息（SSE流式）
-  sendMessage: async (query, conversationId = '', userId = 'test2', files = [], customToken = null) => {
+  sendMessage: async (query, conversationId = '', userId = null, files = [], customToken = null) => {
+    const actualUserId = userId || GlobalConfig.getUserId()
     const requestBody = {
       inputs: {},
       query: query,
       response_mode: "streaming",
       conversation_id: conversationId,
-      user: userId,
+      user: actualUserId,
       files: files
     }
 
@@ -89,11 +91,12 @@ export const chatAPI = {
 // 历史消息API
 export const historyAPI = {
   // 获取历史对话列表
-  getConversations: async (userId = 'test2', limit = 50, customToken = null) => {
+  getConversations: async (userId = null, limit = 50, customToken = null) => {
+    const actualUserId = userId || GlobalConfig.getUserId()
     const authToken = customToken || DEFAULT_API_TOKEN
     const response = await apiClient.get(`/v1/conversations`, {
       params: {
-        user: userId,
+        user: actualUserId,
         limit: limit
       },
       headers: {
@@ -104,11 +107,12 @@ export const historyAPI = {
   },
 
   // 获取对话详情
-  getMessages: async (conversationId, userId = 'test2', customToken = null) => {
+  getMessages: async (conversationId, userId = null, customToken = null) => {
+    const actualUserId = userId || GlobalConfig.getUserId()
     const authToken = customToken || DEFAULT_API_TOKEN
     const response = await apiClient.get(`/v1/messages`, {
       params: {
-        user: userId,
+        user: actualUserId,
         conversation_id: conversationId
       },
       headers: {

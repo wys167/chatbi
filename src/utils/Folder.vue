@@ -102,7 +102,7 @@ const closeHistoryModal = () => {
 const loadConversations = async () => {
   loading.value = true
   try {
-    const response = await historyAPI.getConversations('test2', 50, props.apiToken)
+    const response = await historyAPI.getConversations(null, 50, props.apiToken)
     conversations.value = response.data || []
   } catch (error) {
     console.error('加载对话列表失败:', error)
@@ -121,7 +121,7 @@ const loadConversationMessages = async (conversationId) => {
   }
   
   try {
-    const response = await historyAPI.getMessages(conversationId, 'test2', props.apiToken)
+    const response = await historyAPI.getMessages(conversationId, null, props.apiToken)
     const messages = response.data || []
     
     // 转换消息格式为Chat组件需要的格式

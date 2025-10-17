@@ -172,6 +172,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import GlobalConfig from '../config/globalConfig.js'
 
 const props = defineProps({
   apiToken: {
@@ -204,14 +205,14 @@ const sendMessage = () => {
 const stopSending = async () => {
   try {
     // 发送停止请求
-    const response = await fetch(`http://106.75.76.119/v1/chat-messages/default_task/stop`, {
+    const response = await fetch(`http://106.75.76.119/v1/chat-messages/${GlobalConfig.getStopTaskId()}/stop`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${props.apiToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        user: 'default_user'
+        user: GlobalConfig.getStopUserId()
       })
     })
     

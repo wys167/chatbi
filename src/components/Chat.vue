@@ -485,7 +485,7 @@ const handleSendMessage = async (messageText) => {
   
   try {
     // 使用API工具发送SSE请求，传入当前页面的API Token
-    const response = await chatAPI.sendMessage(messageText, currentConversationId.value, 'test2', [], currentApiToken.value)
+    const response = await chatAPI.sendMessage(messageText, currentConversationId.value, null, [], currentApiToken.value)
     
     // 保存全局的EventSource引用
     globalSendingState.value.currentEventSource = response
