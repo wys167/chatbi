@@ -1,9 +1,11 @@
 <script setup>
-import Chat from './components/Chat.vue'
+// 移除Chat组件的直接引用，改为使用路由
 </script>
 
 <template>
-  <Chat />
+  <div id="app">
+    <router-view />
+  </div>
 </template>
 
 <style>

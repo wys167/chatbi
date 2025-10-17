@@ -3,7 +3,14 @@
     <!-- 侧边栏 -->
     <div class="sidebar">
       <div class="quick-questions">
-        <h3>快捷问题</h3>
+        <div class="quick-questions-header">
+          <h3>试试问一下</h3>
+          <button class="new-chat-btn" @click="startNewChat" title="开始新对话">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M2 12h20"/>
+            </svg>
+          </button>
+        </div>
         <div class="questions-list">
           <div 
             v-for="question in displayedQuestions" 
@@ -20,7 +27,7 @@
       </div>
       <!-- 3D文件夹组件 -->
       <div class="folder-container">
-        <Folder @loadConversation="loadHistoryConversation" />
+        <Folder :apiToken="currentApiToken" :isSending="globalSendingState.isSending" @loadConversation="loadHistoryConversation" />
       </div>
     </div>
     
@@ -52,14 +59,15 @@
         <Loading />
       </div>
       <div class="input-area">
-        <SendMessage ref="sendMessageRef" @send="handleSendMessage" @stop="handleStopMessage" />
+        <SendMessage ref="sendMessageRef" :apiToken="currentApiToken" @send="handleSendMessage" @stop="handleStopMessage" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import MarkdownIt from 'markdown-it'
 import SendMessage from '../utils/SendMessage.vue'
 import Loading from '../utils/Loading.vue'
@@ -67,27 +75,37 @@ import Loading2 from '../utils/Loading2.vue'
 import Refresh from '../utils/Refresh.vue'
 import Folder from '../utils/Folder.vue'
 import { chatAPI, sseUtils } from '../utils/api.js'
+import { getQuickQuestions, getApiToken, getPageConfig } from '../config/pageConfig.js'
 import * as echarts from 'echarts'
 
-// 快捷问题数组
-const quickQuestions = ref([
-  { id: 1, content: '请帮我分析销售数据趋势' },
-  { id: 2, content: '生成一个饼图显示产品分类占比' },
-  { id: 3, content: '创建柱状图展示月度收入' },
-  { id: 4, content: '分析用户行为数据' },
-  { id: 5, content: '制作折线图显示增长趋势' },
-  { id: 6, content: '统计各地区销售情况' },
-  { id: 7, content: '生成散点图分析相关性' },
-  { id: 8, content: '创建雷达图对比多维数据' },
-  { id: 9, content: '制作热力图显示数据分布' }
-])
+// 获取当前路由
+const route = useRoute()
 
-// 当前显示的问题（随机选择3个）
+// 动态获取当前页面的快捷问题数组
+const quickQuestions = computed(() => {
+  const pageKey = route.meta?.pageKey || 'dataAnalysis'
+  return getQuickQuestions(pageKey)
+})
+
+// 动态获取当前页面的API Token
+const currentApiToken = computed(() => {
+  const pageKey = route.meta?.pageKey || 'dataAnalysis'
+  return getApiToken(pageKey)
+})
+
+// 动态获取当前页面配置
+const currentPageConfig = computed(() => {
+  const pageKey = route.meta?.pageKey || 'dataAnalysis'
+  return getPageConfig(pageKey)
+})
+
+// 当前显示的问题（随机选择5个）
 const displayedQuestions = ref([])
 
-// 随机选择3个问题
+// 随机选择5个问题
 const getRandomQuestions = () => {
-  const shuffled = [...quickQuestions.value].sort(() => 0.5 - Math.random())
+  const questions = quickQuestions.value || []
+  const shuffled = [...questions].sort(() => 0.5 - Math.random())
   return shuffled.slice(0, 5)
 }
 
@@ -96,8 +114,51 @@ const refreshQuestions = () => {
   displayedQuestions.value = getRandomQuestions()
 }
 
+// 开始新对话
+const startNewChat = () => {
+  // 检查是否有正在进行的对话
+  if (globalSendingState.value.isSending) {
+    const confirmResult = confirm('当前有对话正在进行中，确定要开始新对话吗？这将停止当前对话。')
+    if (!confirmResult) {
+      return
+    }
+    // 停止当前对话
+    handleStopMessage()
+  }
+  
+  // 清空当前页面的消息
+  messages.value = []
+  currentConversationId.value = ''
+  currentAiMessage = ''
+  currentMessageIndex = -1
+  isLoading.value = false
+  
+  // 重置发送状态
+  if (sendMessageRef.value) {
+    sendMessageRef.value.setSendingState(false)
+  }
+  
+  // 更新页面状态
+  updatePageState()
+  
+  // 刷新快捷问题
+  refreshQuestions()
+}
+
 // 发送快捷问题
 const sendQuickQuestion = (questionContent) => {
+  // 检查全局发送状态，确保同时只能有一个会话在进行
+  const currentPageKey = route.meta?.pageKey || 'dataAnalysis'
+  if (globalSendingState.value.isSending && globalSendingState.value.sendingPageKey !== currentPageKey) {
+    // 弹框提示用户有其他会话正在进行
+    alert('您有其他的会话正在进行中，请稍后')
+    // 重置发送状态，避免按钮卡在发送状态
+    if (sendMessageRef.value) {
+      sendMessageRef.value.setSendingState(false)
+    }
+    return
+  }
+  
   if (sendMessageRef.value) {
     sendMessageRef.value.sendQuickMessage(questionContent)
   }
@@ -115,6 +176,104 @@ const initChart = (container, option) => {
       chart.resize()
     })
   })
+}
+
+// 页面状态管理 - 为每个页面独立保存聊天状态
+const pageStates = ref(new Map())
+
+// 全局发送状态管理 - 确保同时只能有一个会话在进行
+const globalSendingState = ref({
+  isSending: false,
+  sendingPageKey: null,
+  currentEventSource: null,
+  currentMessageIndex: -1,
+  currentAiMessage: '',
+  currentConversationId: ''
+})
+
+// 获取当前页面状态
+const getCurrentPageState = (pageKey = null) => {
+  const targetPageKey = pageKey || route.meta?.pageKey || 'dataAnalysis'
+  if (!pageStates.value.has(targetPageKey)) {
+    pageStates.value.set(targetPageKey, {
+      messages: [],
+      conversationId: '',
+      isLoading: false,
+      isSending: false,
+      currentEventSource: null,
+      currentMessageIndex: -1,
+      currentAiMessage: ''
+    })
+  }
+  return pageStates.value.get(targetPageKey)
+}
+
+// 保存当前页面状态
+const saveCurrentPageState = (pageKey = null) => {
+  const targetPageKey = pageKey || route.meta?.pageKey || 'dataAnalysis'
+  const currentState = {
+    messages: [...messages.value], // 创建新数组避免引用问题
+    conversationId: currentConversationId.value,
+    isLoading: isLoading.value,
+    isSending: sendMessageRef.value ? sendMessageRef.value.isSending : false,
+    currentEventSource: currentEventSource,
+    currentMessageIndex: currentMessageIndex,
+    currentAiMessage: currentAiMessage
+  }
+  pageStates.value.set(targetPageKey, currentState)
+}
+
+// 恢复页面状态
+const restorePageState = (pageKey = null) => {
+  const targetPageKey = pageKey || route.meta?.pageKey || 'dataAnalysis'
+  const state = getCurrentPageState(targetPageKey)
+  messages.value = [...state.messages] // 创建新数组避免引用问题
+  currentConversationId.value = state.conversationId
+  currentMessageIndex = state.currentMessageIndex
+  currentAiMessage = state.currentAiMessage
+  
+  // 检查是否有全局消息正在接收且当前页面是发送页面
+  const isReceivingPage = globalSendingState.value.isSending && 
+                         globalSendingState.value.sendingPageKey === targetPageKey
+  
+  if (isReceivingPage) {
+    // 如果是正在接收消息的页面，恢复接收状态
+    isLoading.value = true
+    currentEventSource = globalSendingState.value.currentEventSource
+    currentMessageIndex = globalSendingState.value.currentMessageIndex
+    currentAiMessage = globalSendingState.value.currentAiMessage
+    // 只有当全局状态有有效的conversationId时才覆盖，否则保持页面原有的conversationId
+    if (globalSendingState.value.currentConversationId) {
+      currentConversationId.value = globalSendingState.value.currentConversationId
+    }
+    
+    // 确保消息数组中有对应的AI消息
+    if (currentMessageIndex >= 0 && messages.value[currentMessageIndex]) {
+      messages.value[currentMessageIndex].content = currentAiMessage
+      // 重新解析和渲染消息内容
+      const parsedParts = parseMessageContent(currentAiMessage)
+      messages.value[currentMessageIndex].parts = parsedParts
+    }
+    
+    // 恢复发送状态
+    if (sendMessageRef.value) {
+      sendMessageRef.value.setSendingState(true)
+    }
+  } else {
+    // 普通页面恢复
+    isLoading.value = state.isLoading
+    currentEventSource = state.currentEventSource
+    
+    // 恢复SendMessage组件的发送状态
+    if (sendMessageRef.value) {
+      sendMessageRef.value.setSendingState(state.isSending)
+    }
+    
+    // 如果有正在进行的SSE连接但页面已经切换，重置loading状态
+    if (currentEventSource && !isLoading.value) {
+      currentEventSource = null
+    }
+  }
 }
 
 const messages = ref([])
@@ -149,9 +308,24 @@ md.renderer.rules.table_close = function(tokens, idx, options, env, renderer) {
   return defaultTableCloseRender(tokens, idx, options, env, renderer) + '</div>'
 }
 const isLoading = ref(false)
-let currentConversationId = ''
+const currentConversationId = ref('')
 let currentAiMessage = ''
 let currentMessageIndex = -1
+
+// 实时更新页面状态的辅助函数
+const updatePageState = (pageKey = null) => {
+  const targetPageKey = pageKey || route.meta?.pageKey || 'dataAnalysis'
+  if (pageStates.value.has(targetPageKey)) {
+    const state = pageStates.value.get(targetPageKey)
+    state.messages = [...messages.value] // 创建新数组避免引用问题
+    state.conversationId = currentConversationId.value
+    state.isLoading = isLoading.value
+    state.isSending = sendMessageRef.value ? sendMessageRef.value.isSending : false
+    state.currentEventSource = currentEventSource
+    state.currentMessageIndex = currentMessageIndex
+    state.currentAiMessage = currentAiMessage
+  }
+}
 
 // 解析消息内容，识别echarts格式
 const parseMessageContent = (content) => {
@@ -264,6 +438,22 @@ const handleScroll = () => {
 const handleSendMessage = async (messageText) => {
   if (!messageText.trim()) return
   
+  // 检查全局发送状态，确保同时只能有一个会话在进行
+  const currentPageKey = route.meta?.pageKey || 'dataAnalysis'
+  if (globalSendingState.value.isSending && globalSendingState.value.sendingPageKey !== currentPageKey) {
+    // 弹框提示用户有其他会话正在进行
+    alert('您有其他的会话正在进行中，请稍后')
+    // 重置发送状态，避免按钮卡在发送状态
+    if (sendMessageRef.value) {
+      sendMessageRef.value.setSendingState(false)
+    }
+    return
+  }
+  
+  // 设置全局发送状态
+  globalSendingState.value.isSending = true
+  globalSendingState.value.sendingPageKey = currentPageKey
+  
   // 设置加载状态
   isLoading.value = true
   
@@ -283,13 +473,22 @@ const handleSendMessage = async (messageText) => {
   currentMessageIndex = messages.value.length - 1
   currentAiMessage = ''
   
+  // 设置全局SSE状态
+  globalSendingState.value.currentMessageIndex = currentMessageIndex
+  globalSendingState.value.currentAiMessage = ''
+  globalSendingState.value.currentConversationId = currentConversationId.value
+  
+  // 更新页面状态
+  updatePageState()
+  
   scrollToBottom()
   
   try {
-    // 使用API工具发送SSE请求
-    const response = await chatAPI.sendMessage(messageText, currentConversationId)
+    // 使用API工具发送SSE请求，传入当前页面的API Token
+    const response = await chatAPI.sendMessage(messageText, currentConversationId.value, 'test2', [], currentApiToken.value)
     
-    // 保存当前的EventSource引用
+    // 保存全局的EventSource引用
+    globalSendingState.value.currentEventSource = response
     currentEventSource = response
     
     // 处理SSE流
@@ -303,6 +502,9 @@ const handleSendMessage = async (messageText) => {
     console.error('发送消息失败:', error)
     messages.value[currentMessageIndex].content = '发送消息失败，请重试。'
     isLoading.value = false
+    currentEventSource = null
+    // 更新页面状态
+    updatePageState()
     // 重置发送状态
     if (sendMessageRef.value) {
       sendMessageRef.value.setSendingState(false)
@@ -318,25 +520,72 @@ const handleStopMessage = () => {
     currentEventSource = null
   }
   
-  // 停止加载状态
-  isLoading.value = false
+  // 更新发送页面的停止状态
+  const sendingPageKey = globalSendingState.value.sendingPageKey
+  const messageIndex = globalSendingState.value.currentMessageIndex
   
-  // 在当前AI消息后添加停止标识
-  if (currentMessageIndex >= 0 && messages.value[currentMessageIndex]) {
-    const currentContent = messages.value[currentMessageIndex].content || ''
-    if (currentContent.trim()) {
-      messages.value[currentMessageIndex].content = currentContent + '\n\n[消息已停止]'
-      // 重新解析内容
-      const parsedParts = parseMessageContent(messages.value[currentMessageIndex].content)
-      messages.value[currentMessageIndex].parts = parsedParts
-    } else {
-      messages.value[currentMessageIndex].content = '[消息已停止]'
-      messages.value[currentMessageIndex].parts = [{
-        type: 'text',
-        content: '[消息已停止]'
-      }]
+  if (sendingPageKey && pageStates.value.has(sendingPageKey)) {
+    const pageState = pageStates.value.get(sendingPageKey)
+    pageState.isLoading = false
+    pageState.isSending = false
+    pageState.currentEventSource = null
+    
+    // 在发送页面的AI消息后添加停止标识
+    if (pageState.messages[messageIndex]) {
+      const currentContent = pageState.messages[messageIndex].content || ''
+      if (currentContent.trim()) {
+        pageState.messages[messageIndex].content = currentContent + '\n\n[消息已停止]'
+        // 重新解析内容
+        const parsedParts = parseMessageContent(pageState.messages[messageIndex].content)
+        pageState.messages[messageIndex].parts = parsedParts
+      } else {
+        pageState.messages[messageIndex].content = '[消息已停止]'
+        pageState.messages[messageIndex].parts = [{
+          type: 'text',
+          content: '[消息已停止]'
+        }]
+      }
     }
   }
+  
+  // 如果当前页面就是发送页面，同步更新当前显示
+  const currentPageKey = route.meta?.pageKey || 'dataAnalysis'
+  if (currentPageKey === sendingPageKey) {
+    isLoading.value = false
+    
+    // 在当前AI消息后添加停止标识
+    if (currentMessageIndex >= 0 && messages.value[currentMessageIndex]) {
+      const currentContent = messages.value[currentMessageIndex].content || ''
+      if (currentContent.trim()) {
+        messages.value[currentMessageIndex].content = currentContent + '\n\n[消息已停止]'
+        // 重新解析内容
+        const parsedParts = parseMessageContent(messages.value[currentMessageIndex].content)
+        messages.value[currentMessageIndex].parts = parsedParts
+      } else {
+        messages.value[currentMessageIndex].content = '[消息已停止]'
+        messages.value[currentMessageIndex].parts = [{
+          type: 'text',
+          content: '[消息已停止]'
+        }]
+      }
+    }
+    
+    // 重置发送状态
+    if (sendMessageRef.value) {
+      sendMessageRef.value.setSendingState(false)
+    }
+  }
+  
+  // 重置全局发送状态
+  globalSendingState.value.isSending = false
+  globalSendingState.value.sendingPageKey = null
+  globalSendingState.value.currentEventSource = null
+  globalSendingState.value.currentMessageIndex = -1
+  globalSendingState.value.currentAiMessage = ''
+  globalSendingState.value.currentConversationId = ''
+  
+  // 更新页面状态
+  updatePageState()
   
   console.log('消息发送已停止')
 }
@@ -344,22 +593,47 @@ const handleStopMessage = () => {
 // 处理SSE消息
 const handleSSEMessage = (data) => {
   if (data.event === 'message' && data.answer) {
-    // 更新会话ID
+    // 更新全局会话ID
     if (data.conversation_id) {
-      currentConversationId = data.conversation_id
+      globalSendingState.value.currentConversationId = data.conversation_id
+      // 只有当前页面是发送页面时才更新当前页面的conversationId
+      const currentPageKey = route.meta?.pageKey || 'dataAnalysis'
+      const sendingPageKey = globalSendingState.value.sendingPageKey
+      if (currentPageKey === sendingPageKey) {
+        currentConversationId.value = data.conversation_id
+      }
     }
     
-    // 累积AI回答内容
-    currentAiMessage += data.answer
+    // 累积AI回答内容到全局状态
+    globalSendingState.value.currentAiMessage += data.answer
+    currentAiMessage = globalSendingState.value.currentAiMessage
     
     // 解析消息内容，识别echarts和普通文本
-    const parsedParts = parseMessageContent(currentAiMessage)
+    const parsedParts = parseMessageContent(globalSendingState.value.currentAiMessage)
     
-    // 更新消息的parts和content
-    messages.value[currentMessageIndex].parts = parsedParts
-    messages.value[currentMessageIndex].content = currentAiMessage
+    // 获取发送页面的状态并更新
+    const sendingPageKey = globalSendingState.value.sendingPageKey
+    if (sendingPageKey && pageStates.value.has(sendingPageKey)) {
+      const pageState = pageStates.value.get(sendingPageKey)
+      const messageIndex = globalSendingState.value.currentMessageIndex
+      
+      if (pageState.messages[messageIndex]) {
+        pageState.messages[messageIndex].parts = parsedParts
+        pageState.messages[messageIndex].content = globalSendingState.value.currentAiMessage
+        pageState.conversationId = globalSendingState.value.currentConversationId
+      }
+    }
     
-    scrollToBottom()
+    // 如果当前页面就是发送页面，同步更新当前显示的消息
+    const currentPageKey = route.meta?.pageKey || 'dataAnalysis'
+    if (currentPageKey === sendingPageKey && messages.value[globalSendingState.value.currentMessageIndex]) {
+      messages.value[globalSendingState.value.currentMessageIndex].parts = parsedParts
+      messages.value[globalSendingState.value.currentMessageIndex].content = globalSendingState.value.currentAiMessage
+      scrollToBottom()
+    }
+    
+    // 更新页面状态
+    updatePageState()
   }
 }
 
@@ -368,30 +642,92 @@ const handleSSEMessage = (data) => {
 // 处理SSE完成
 const handleSSEComplete = () => {
   console.log('SSE流处理完成')
-  isLoading.value = false
-  currentEventSource = null
-  // 重置发送状态
-  if (sendMessageRef.value) {
-    sendMessageRef.value.setSendingState(false)
+  
+  // 更新发送页面的最终状态
+  const sendingPageKey = globalSendingState.value.sendingPageKey
+  if (sendingPageKey && pageStates.value.has(sendingPageKey)) {
+    const pageState = pageStates.value.get(sendingPageKey)
+    pageState.isLoading = false
+    pageState.isSending = false
+    pageState.currentEventSource = null
+    pageState.conversationId = globalSendingState.value.currentConversationId
   }
+  
+  // 如果当前页面就是发送页面，同步更新当前状态
+  const currentPageKey = route.meta?.pageKey || 'dataAnalysis'
+  if (currentPageKey === sendingPageKey) {
+    isLoading.value = false
+    // 只有当前页面是发送页面时才更新conversationId
+    currentConversationId.value = globalSendingState.value.currentConversationId
+    // 重置发送状态
+    if (sendMessageRef.value) {
+      sendMessageRef.value.setSendingState(false)
+    }
+  }
+  // 重要：绝对不要更新非发送页面的conversationId，保持各页面独立的会话状态
+  
+  currentEventSource = null
+  
+  // 重置全局发送状态
+  globalSendingState.value.isSending = false
+  globalSendingState.value.sendingPageKey = null
+  globalSendingState.value.currentEventSource = null
+  globalSendingState.value.currentMessageIndex = -1
+  globalSendingState.value.currentAiMessage = ''
+  globalSendingState.value.currentConversationId = ''
+  
+  // 更新页面状态
+  updatePageState()
 }
 
 // 处理SSE错误时也要重置状态
 const handleSSEError = (error) => {
   console.error('SSE流处理错误:', error)
-  messages.value[currentMessageIndex].content = '接收消息时发生错误，请重试。'
-  isLoading.value = false
-  currentEventSource = null
-  // 重置发送状态
-  if (sendMessageRef.value) {
-    sendMessageRef.value.setSendingState(false)
+  
+  // 更新发送页面的错误状态
+  const sendingPageKey = globalSendingState.value.sendingPageKey
+  const messageIndex = globalSendingState.value.currentMessageIndex
+  
+  if (sendingPageKey && pageStates.value.has(sendingPageKey)) {
+    const pageState = pageStates.value.get(sendingPageKey)
+    if (pageState.messages[messageIndex]) {
+      pageState.messages[messageIndex].content = '接收消息时发生错误，请重试。'
+    }
+    pageState.isLoading = false
+    pageState.isSending = false
+    pageState.currentEventSource = null
   }
+  
+  // 如果当前页面就是发送页面，同步更新当前显示
+  const currentPageKey = route.meta?.pageKey || 'dataAnalysis'
+  if (currentPageKey === sendingPageKey && messages.value[messageIndex]) {
+    messages.value[messageIndex].content = '接收消息时发生错误，请重试。'
+    isLoading.value = false
+    // 重置发送状态
+    if (sendMessageRef.value) {
+      sendMessageRef.value.setSendingState(false)
+    }
+  }
+  
+  currentEventSource = null
+  
+  // 重置全局发送状态
+  globalSendingState.value.isSending = false
+  globalSendingState.value.sendingPageKey = null
+  globalSendingState.value.currentEventSource = null
+  globalSendingState.value.currentMessageIndex = -1
+  globalSendingState.value.currentAiMessage = ''
+  globalSendingState.value.currentConversationId = ''
+  
+  // 更新页面状态
+  updatePageState()
 }
 
 // 加载历史对话
 const loadHistoryConversation = async (historyMessages) => {
   // 清空当前消息
   messages.value = []
+  currentConversationId.value = ''
   
   // 异步逐条加载历史消息，模拟实时对话的渲染方式
   for (let i = 0; i < historyMessages.length; i++) {
@@ -416,16 +752,56 @@ const loadHistoryConversation = async (historyMessages) => {
     scrollToBottom()
   }
   
+  // 更新页面状态
+  updatePageState()
+  
   console.log('已加载历史对话:', historyMessages.length, '条消息')
 }
 
+// 监听路由变化，切换页面时刷新快捷问题
+const currentPageKey = computed(() => route.meta?.pageKey || 'dataAnalysis')
+
+// 监听页面切换
+const refreshQuestionsOnRouteChange = (pageKey = null) => {
+  displayedQuestions.value = getRandomQuestions()
+  // 恢复目标页面的聊天状态
+  restorePageState(pageKey)
+  // 滚动到底部
+  nextTick(() => {
+    scrollToBottom()
+  })
+}
+
+// 使用watch监听路由变化
+watch(
+  () => route.meta?.pageKey,
+  (newPageKey, oldPageKey) => {
+    if (newPageKey && newPageKey !== oldPageKey) {
+      // 立即保存旧页面状态（如果存在）
+      if (oldPageKey) {
+        saveCurrentPageState(oldPageKey)
+      }
+      // 立即切换到新页面并恢复状态
+      refreshQuestionsOnRouteChange(newPageKey)
+    }
+  },
+  { immediate: false, flush: 'sync' }
+)
+
 onMounted(() => {
-  scrollToBottom()
   // 初始化显示的快捷问题
   displayedQuestions.value = getRandomQuestions()
+  // 恢复当前页面状态
+  restorePageState()
+  // 滚动到底部
+  nextTick(() => {
+    scrollToBottom()
+  })
 })
 
 onUnmounted(() => {
+  // 保存当前页面状态
+  saveCurrentPageState()
   // 清理定时器
   if (scrollTimeout) {
     clearTimeout(scrollTimeout)
@@ -445,7 +821,7 @@ onUnmounted(() => {
 
 /* 侧边栏 - 占容器宽度的30%，包含快捷问题和3D文件夹 */
 .sidebar {
-  width: 30%; /* 占容器宽度的30% */
+  width: 20%; /* 占容器宽度的30% */
   height: 100%; /* 占满容器高度 */
   border-right: 1px solid #e0e0e0; /* 右边框分隔线 */
   padding: 20px; /* 内边距20px */
@@ -476,12 +852,45 @@ onUnmounted(() => {
   flex-direction: column; /* 垂直排列 */
 }
 
+/* 快捷问题标题容器样式 */
+.quick-questions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
 /* 快捷问题标题样式 */
 .quick-questions h3 {
-  margin: 0 0 20px 0; /* 下边距20px，其他边距为0 */
+  margin: 0; /* 移除边距，由容器控制 */
   color: #333; /* 深灰色文字 */
   font-size: 16px; /* 字体大小16px */
   font-weight: 600; /* 字体粗细为600（半粗体） */
+}
+
+/* 新对话按钮样式 */
+.new-chat-btn {
+  background: none;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.new-chat-btn:hover {
+  background-color: #f5f5f5;
+  border-color: #d0d0d0;
+  color: #333;
+}
+
+.new-chat-btn:active {
+  background-color: #e8e8e8;
+  transform: scale(0.95);
 }
 
 /* 问题列表容器 */

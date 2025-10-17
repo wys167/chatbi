@@ -173,6 +173,13 @@
 <script setup>
 import { ref } from 'vue'
 
+const props = defineProps({
+  apiToken: {
+    type: String,
+    required: true
+  }
+})
+
 const emit = defineEmits(['send', 'stop'])
 const messageText = ref('')
 const isSending = ref(false)
@@ -200,7 +207,7 @@ const stopSending = async () => {
     const response = await fetch(`http://106.75.76.119/v1/chat-messages/default_task/stop`, {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer your_api_key_here',
+        'Authorization': `Bearer ${props.apiToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -232,7 +239,10 @@ defineExpose({
   setSendingState: (state) => {
     isSending.value = state
   },
-  sendQuickMessage
+  sendQuickMessage,
+  get isSending() {
+    return isSending.value
+  }
 })
 
 const handleKeyDown = (event) => {

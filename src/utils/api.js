@@ -3,14 +3,15 @@ import axios from 'axios'
 // API基础配置
 const API_BASE_URL = 'http://106.75.76.119'
 /* const API_TOKEN = 'Bearer app-upQgqetiw4q7jlW75v5KaZvT' */
-const API_TOKEN = 'Bearer app-HCDo84avfUjmuc1mtsUeEclx'
+// 默认API Token，可以通过参数动态覆盖
+const DEFAULT_API_TOKEN = 'Bearer app-HCDo84avfUjmuc1mtsUeEclx'
 
 // 创建axios实例
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': API_TOKEN
+    'Authorization': DEFAULT_API_TOKEN
   },
   timeout: 30000 // 30秒超时
 })
@@ -42,7 +43,7 @@ apiClient.interceptors.response.use(
 // 聊天消息API
 export const chatAPI = {
   // 发送聊天消息（SSE流式）
-  sendMessage: async (query, conversationId = '', userId = '123456', files = []) => {
+  sendMessage: async (query, conversationId = '', userId = 'test2', files = [], customToken = null) => {
     const requestBody = {
       inputs: {},
       query: query,
@@ -55,12 +56,15 @@ export const chatAPI = {
     // 创建AbortController用于中断请求
     const abortController = new AbortController()
 
+    // 使用自定义Token或默认Token
+    const authToken = customToken || DEFAULT_API_TOKEN
+
     // 使用fetch发送SSE请求
     const response = await fetch(`${API_BASE_URL}/v1/chat-messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': API_TOKEN,
+        'Authorization': authToken,
         'Accept': 'text/event-stream'
       },
       body: JSON.stringify(requestBody),
@@ -85,22 +89,30 @@ export const chatAPI = {
 // 历史消息API
 export const historyAPI = {
   // 获取历史对话列表
-  getConversations: async (userId = '123456', limit = 50) => {
+  getConversations: async (userId = 'test2', limit = 50, customToken = null) => {
+    const authToken = customToken || DEFAULT_API_TOKEN
     const response = await apiClient.get(`/v1/conversations`, {
       params: {
         user: userId,
         limit: limit
+      },
+      headers: {
+        'Authorization': authToken
       }
     })
     return response.data
   },
 
   // 获取对话详情
-  getMessages: async (conversationId, userId = '123456') => {
+  getMessages: async (conversationId, userId = 'test2', customToken = null) => {
+    const authToken = customToken || DEFAULT_API_TOKEN
     const response = await apiClient.get(`/v1/messages`, {
       params: {
         user: userId,
         conversation_id: conversationId
+      },
+      headers: {
+        'Authorization': authToken
       }
     })
     return response.data

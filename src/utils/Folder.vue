@@ -8,6 +8,8 @@
       <div class="folder-front">
         <div class="folder-tab"></div>
         <div class="folder-tab-corner"></div>
+        <!-- 文件夹表面文字 -->
+        <div class="folder-text">历史对话</div>
       </div>
     </div>
     
@@ -37,9 +39,25 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { historyAPI } from './api.js'
 import MarkdownIt from 'markdown-it'
+
+// 获取当前路由
+const route = useRoute()
+
+// 定义props
+const props = defineProps({
+  apiToken: {
+    type: String,
+    default: null
+  },
+  isSending: {
+    type: Boolean,
+    default: false
+  }
+})
 
 // 响应式数据
 const showHistoryModal = ref(false)
@@ -56,6 +74,16 @@ const md = new MarkdownIt({
 
 // 定义事件
 const emit = defineEmits(['loadConversation'])
+
+// 监听路由变化，自动关闭弹窗
+watch(
+  () => route.path,
+  () => {
+    if (showHistoryModal.value) {
+      closeHistoryModal()
+    }
+  }
+)
 
 // 切换历史记录弹出框
 const toggleHistoryModal = async () => {
@@ -74,7 +102,7 @@ const closeHistoryModal = () => {
 const loadConversations = async () => {
   loading.value = true
   try {
-    const response = await historyAPI.getConversations()
+    const response = await historyAPI.getConversations('test2', 50, props.apiToken)
     conversations.value = response.data || []
   } catch (error) {
     console.error('加载对话列表失败:', error)
@@ -86,8 +114,14 @@ const loadConversations = async () => {
 
 // 加载对话消息并渲染到Chat组件
 const loadConversationMessages = async (conversationId) => {
+  // 检查是否有正在进行的会话
+  if (props.isSending) {
+    alert('您有一条会话窗口正在进行中，请稍后。')
+    return
+  }
+  
   try {
-    const response = await historyAPI.getMessages(conversationId)
+    const response = await historyAPI.getMessages(conversationId, 'test2', props.apiToken)
     const messages = response.data || []
     
     // 转换消息格式为Chat组件需要的格式
@@ -272,11 +306,31 @@ const formatTime = (timestamp) => {
   clip-path: polygon(100% 14%, 50% 100%, 100% 100%); /* 裁剪成三角形，创建圆角过渡 */
 }
 
+/* 文件夹表面文字样式 - 贴在文件夹表面的汉字 */
+.folder-text {
+  position: absolute; /* 绝对定位 */
+  top: 50%; /* 垂直居中 */
+  left: 50%; /* 水平居中 */
+  transform: translate(-50%, -50%); /* 精确居中 */
+  font-size: 18px; /* 字体大小18px */
+  font-weight: 600; /* 字体粗细600 */
+  color: #ffffff; /* 白色文字 */
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); /* 文字阴影，增加可读性 */
+  pointer-events: none; /* 不响应鼠标事件，避免干扰点击 */
+  user-select: none; /* 不可选中文字 */
+  z-index: 10; /* 确保文字在最上层 */
+}
+
+/* 文件夹悬停时文字的3D效果 - 跟随folder-front的变换 */
+.folder-container:hover .folder-text {
+  text-shadow: 0 4px 8px rgba(0, 0, 0, 0.4); /* 悬停时增强阴影效果 */
+}
+
 /* 历史记录弹出框样式 - 点击文件夹时显示的对话历史列表 */
 .history-modal {
   position: absolute; /* 绝对定位 */
   bottom: 180px; /* 距离底部160px，与文件夹高度对齐 */
-  left: 150px; /* 左侧对齐 */
+  left: 50px; /* 左侧对齐 */
   width: 340px; /* 宽度340px，与文件夹宽度相同 */
   height: 360px; /* 高度360px，是宽度的1.5倍 */
   background: white; /* 白色背景 */

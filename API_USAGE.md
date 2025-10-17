@@ -47,7 +47,7 @@ import { chatAPI } from '../utils/api.js'
 const response = await chatAPI.sendMessage(
   query,           // 消息内容
   conversationId,  // 会话ID（可选）
-  userId,          // 用户ID（默认：'123456'）
+  userId,          // 用户ID（默认：'test2'）
   files           // 文件列表（默认：[]）
 )
 ```
